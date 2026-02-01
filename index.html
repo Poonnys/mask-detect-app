@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Mask Detection</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <!-- TensorFlow.js -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+  <!-- Teachable Machine -->
+  <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      padding: 20px;
+    }
+
+    .container {
+      background: rgba(255, 255, 255, 0.95);
+      border-radius: 24px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 400px;
+      width: 100%;
+      backdrop-filter: blur(10px);
+    }
+
+    h1 {
+      color: #667eea;
+      font-size: 32px;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      color: #666;
+      font-size: 14px;
+      margin-bottom: 30px;
+    }
+
+    button {
+      width: 100%;
+      padding: 16px 32px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      border-radius: 12px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      transition: all 0.3s ease;
+      margin-bottom: 20px;
+      box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    }
+
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    #webcam-container {
+      margin: 20px 0;
+      border-radius: 16px;
+      overflow: hidden;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+      background: #f5f5f5;
+    }
+
+    #webcam-container canvas {
+      width: 100% !important;
+      height: auto !important;
+      display: block;
+    }
+
+    #label-container {
+      margin-top: 20px;
+    }
+
+    #label-container > div {
+      background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+      padding: 16px 20px;
+      margin: 10px 0;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 500;
+      color: #333;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+      transition: all 0.3s ease;
+    }
+
+    #label-container > div:hover {
+      transform: translateX(4px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+    }
+
+    .class-name {
+      font-weight: 600;
+      color: #667eea;
+    }
+
+    .probability {
+      font-weight: 700;
+      color: #764ba2;
+      font-size: 16px;
+    }
+
+    .emoji {
+      font-size: 48px;
+      margin-bottom: 20px;
+      animation: float 3s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% {
+        transform: translateY(0);
+      }
+      50% {
+        transform: translateY(-10px);
+      }
+    }
+
+    .loading {
+      display: none;
+      margin: 20px 0;
+      color: #667eea;
+      font-weight: 600;
+    }
+
+    .loading.active {
+      display: block;
+    }
+
+    @media (max-width: 600px) {
+      .container {
+        padding: 30px 20px;
+      }
+
+      h1 {
+        font-size: 28px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="emoji">😷</div>
+    <h1>Mask Detection</h1>
+    <p class="subtitle">face mask detector</p>
+    
+    <button id="startBtn" onclick="init()">Start Camera</button>
+    <div class="loading" id="loading">Loading model...</div>
+
+    <div id="webcam-container"></div>
+    <div id="label-container"></div>
+  </div>
+
+  <script>
+    const URL = "https://teachablemachine.withgoogle.com/models/Yk3HWXLOe/";
+
+    let model, webcam, labelContainer, maxPredictions;
+
+    async function init() {
+      const loadingEl = document.getElementById("loading");
+      const startBtn = document.getElementById("startBtn");
+      
+      loadingEl.classList.add("active");
+      startBtn.disabled = true;
+      startBtn.textContent = "Loading...";
+
+      try {
+        const modelURL = URL + "model.json";
+        const metadataURL = URL + "metadata.json";
+
+        model = await tmImage.load(modelURL, metadataURL);
+        maxPredictions = model.getTotalClasses();
+
+        webcam = new tmImage.Webcam(300, 300, true);
+        await webcam.setup();
+        await webcam.play();
+        window.requestAnimationFrame(loop);
+
+        document.getElementById("webcam-container").appendChild(webcam.canvas);
+
+        labelContainer = document.getElementById("label-container");
+        labelContainer.innerHTML = "";
+        for (let i = 0; i < maxPredictions; i++) {
+          labelContainer.appendChild(document.createElement("div"));
+        }
+
+        loadingEl.classList.remove("active");
+        startBtn.style.display = "none";
+      } catch (error) {
+        console.error("Error:", error);
+        loadingEl.textContent = "Error loading model. Please try again.";
+        startBtn.disabled = false;
+        startBtn.textContent = "Retry";
+      }
+    }
+
+    async function loop() {
+      webcam.update();
+      await predict();
+      window.requestAnimationFrame(loop);
+    }
+
+    async function predict() {
+      const prediction = await model.predict(webcam.canvas);
+      for (let i = 0; i < maxPredictions; i++) {
+        const percentage = (prediction[i].probability * 100).toFixed(1);
+        labelContainer.childNodes[i].innerHTML = `
+          <span class="class-name">${prediction[i].className}</span>
+          <span class="probability">${percentage}%</span>
+        `;
+      }
+    }
+  </script>
+</body>
+</html>
